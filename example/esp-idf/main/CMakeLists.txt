@@ -1,0 +1,40 @@
+
+idf_component_register(
+    SRCS
+        main.c
+        apps/01_WIFI_Connect/WiFi_Connect.c
+        apps/02_Clock_Display/Clock_App.c
+        apps/02_Clock_Display/assets/UI/image/Clock_Background.c
+        apps/02_Clock_Display/Clock_Controller.c
+        apps/02_Clock_Display/assets/Fonts/SC_Font_1.c
+        apps/02_Clock_Display/assets/UI/image/Clock_Hand_Hour.c
+        apps/02_Clock_Display/assets/UI/image/Clock_Hand_Min.c
+        apps/02_Clock_Display/assets/UI/image/Clock_Hand_Sec.c
+        apps/02_Clock_Display/assets/UI/Clock_Face_Classic.c
+        apps/02_Clock_Display/assets/UI/Clock_Face_Digital.c
+        examples/01_RGB_Test/RGB_Test.c
+        examples/02_Mic_Speaker_Test/Mic_Speaker_Test.c
+        examples/03_IMU_Test/IMU_Test.c
+        examples/04_Bat_Test/Bat_Test.c
+        examples/05_RTC_Test/RTC_Test.c
+        examples/06_LVGL_Demo_Test/LVGL_Demo_Test.c
+        examples/07_Brookesia_Test/Brookesia_Test.cpp
+        examples/07_Brookesia_Test/apps/brookesia_app_squareline_demo/ui/fonts/ui_font_Number.c
+        examples/07_Brookesia_Test/apps/brookesia_app_squareline_demo/ui/images/ui_img_pattern_png.c
+        examples/07_Brookesia_Test/apps/brookesia_app_squareline_demo/ui/images/ui_img_clock_hour_png.c
+        examples/07_Brookesia_Test/apps/brookesia_app_squareline_demo/ui/images/ui_img_clock_min_png.c
+        examples/07_Brookesia_Test/apps/brookesia_app_squareline_demo/ui/images/ui_img_clock_sec_png.c
+    INCLUDE_DIRS
+        .
+        apps/02_Clock_Display
+        apps/02_Clock_Display/assets/UI
+    WHOLE_ARCHIVE
+    REQUIRES 
+        esp_http_server
+        esp_netif
+        esp_wifi
+        esp_event
+        nvs_flash
+        esp_lvgl_adapter
+    )
+    

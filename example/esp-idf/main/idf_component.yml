@@ -1,0 +1,8 @@
+description: BSP Display rotation example
+dependencies:
+  esp32_c5_touch_lcd_1_69:
+    version: "*"
+    override_path: "../components/esp32_c5_touch_lcd_1_69" 
+  espressif/esp-brookesia:
+    version: "0.5.0"
+
