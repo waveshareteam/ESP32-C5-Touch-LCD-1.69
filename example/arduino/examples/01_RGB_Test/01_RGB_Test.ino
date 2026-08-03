@@ -5,6 +5,15 @@ static const uint16_t Colors[] = {
     0x07E0,
     0x001F,
     0xFFFF,
+    0x0000,
+};
+
+static const char *ColorNames[] = {
+    "R",
+    "G",
+    "B",
+    "W",
+    "BL",
 };
 
 static uint8_t color_index = 0;
@@ -28,12 +37,12 @@ void setup(void)
 void loop(void)
 {
     bsp_display_fill(Colors[color_index]);
-    Serial.printf("show color index: %u\n", color_index);
+    Serial.printf("Show color: %s (%u)\n", ColorNames[color_index], color_index);
 
     color_index++;
     if (color_index >= (sizeof(Colors) / sizeof(Colors[0]))) {
         color_index = 0;
     }
 
-    delay(1000);
+    delay(5000);
 }

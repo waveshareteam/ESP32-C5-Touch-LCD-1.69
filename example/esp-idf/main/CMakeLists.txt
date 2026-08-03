@@ -4,7 +4,6 @@ idf_component_register(
         main.c
         apps/01_WIFI_Connect/WiFi_Connect.c
         apps/02_Clock_Display/Clock_App.c
-        apps/02_Clock_Display/assets/UI/image/Clock_Background.c
         apps/02_Clock_Display/Clock_Controller.c
         apps/02_Clock_Display/assets/Fonts/SC_Font_1.c
         apps/02_Clock_Display/assets/UI/image/Clock_Hand_Hour.c

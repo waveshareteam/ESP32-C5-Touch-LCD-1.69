@@ -10,11 +10,11 @@
 
 
 // Only one example code can be run at a time
-#define EXAMPLE_RGB_TEST            0
+#define EXAMPLE_RGB_TEST            1
 #define EXAMPLE_MIC_SPEAKER_TEST    0
 #define EXAMPLE_IMU_TEST            0
 #define EXAMPLE_BAT_TEST            0
-#define EXAMPLE_RTC_TEST            1
+#define EXAMPLE_RTC_TEST            0
 #define EXAMPLE_LVGL_DEMO_TEST      0
 #define EXAMPLE_Brookesia_TEST      0
 

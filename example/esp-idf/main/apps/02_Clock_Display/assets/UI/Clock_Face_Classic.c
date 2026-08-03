@@ -11,8 +11,13 @@
 
 #define CLOCK_FACE_CLASSIC_CENTER_X        (120)
 #define CLOCK_FACE_CLASSIC_CENTER_Y        (140)
+#define CLOCK_FACE_CLASSIC_SCALE_OUTER_R   (CLOCK_FACE_CLASSIC_SEC_PIVOT_Y + 5)
+#define CLOCK_FACE_CLASSIC_SCALE_COUNT     (60)
+#define CLOCK_FACE_CLASSIC_SCALE_HOUR_W    (3)
+#define CLOCK_FACE_CLASSIC_SCALE_HOUR_H    (14)
+#define CLOCK_FACE_CLASSIC_SCALE_MIN_W     (2)
+#define CLOCK_FACE_CLASSIC_SCALE_MIN_H     (7)
 
-LV_IMG_DECLARE(Clock_Background);
 LV_IMG_DECLARE(clock_hand_hour);
 LV_IMG_DECLARE(clock_hand_min);
 LV_IMG_DECLARE(clock_hand_sec);
@@ -29,11 +34,38 @@ static void clock_face_classic_place_hand(lv_obj_t *hand, int32_t pivot_x, int32
     lv_obj_set_pos(hand, CLOCK_FACE_CLASSIC_CENTER_X - pivot_x, CLOCK_FACE_CLASSIC_CENTER_Y - pivot_y);
 }
 
+static void clock_face_classic_create_scale(lv_obj_t *screen, uint32_t index)
+{
+    lv_obj_t *scale = NULL;
+    int32_t scale_w = 0;
+    int32_t scale_h = 0;
+    lv_color_t scale_color = lv_color_hex(0xCDD2E8);
+
+    if ((index % 5) == 0) {
+        scale_w = CLOCK_FACE_CLASSIC_SCALE_HOUR_W;
+        scale_h = CLOCK_FACE_CLASSIC_SCALE_HOUR_H;
+        scale_color = lv_color_hex(0x5C679C);
+    } else {
+        scale_w = CLOCK_FACE_CLASSIC_SCALE_MIN_W;
+        scale_h = CLOCK_FACE_CLASSIC_SCALE_MIN_H;
+    }
+
+    scale = lv_obj_create(screen);
+    lv_obj_set_size(scale, scale_w, scale_h);
+    lv_obj_set_pos(scale, CLOCK_FACE_CLASSIC_CENTER_X - (scale_w / 2), CLOCK_FACE_CLASSIC_CENTER_Y - CLOCK_FACE_CLASSIC_SCALE_OUTER_R);
+    lv_obj_remove_flag(scale, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_radius(scale, LV_RADIUS_CIRCLE, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(scale, scale_color, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(scale, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(scale, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_transform_pivot_x(scale, scale_w / 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_transform_pivot_y(scale, CLOCK_FACE_CLASSIC_SCALE_OUTER_R, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_transform_rotation(scale, (int32_t)index * 60, LV_PART_MAIN | LV_STATE_DEFAULT);
+}
+
 static void clock_face_classic_create(lv_obj_t *screen)
 {
-    lv_obj_t *background = NULL;
-    lv_obj_t *dot_bar = NULL;
-    size_t index = 0;
+    uint32_t scale_index = 0;
 
     lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(screen, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -41,10 +73,10 @@ static void clock_face_classic_create(lv_obj_t *screen)
     lv_obj_set_style_bg_image_src(screen, NULL, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_image_tiled(screen, false, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    background = lv_image_create(screen);
-    lv_image_set_src(background, &Clock_Background);
-    lv_obj_set_align(background, LV_ALIGN_CENTER);
-    lv_obj_remove_flag(background, LV_OBJ_FLAG_SCROLLABLE);
+    while (scale_index < CLOCK_FACE_CLASSIC_SCALE_COUNT) {
+        clock_face_classic_create_scale(screen, scale_index);
+        scale_index++;
+    }
 
     clock_face_classic_min_hand = lv_image_create(screen);
     lv_image_set_src(clock_face_classic_min_hand, &clock_hand_min);
@@ -82,30 +114,6 @@ static void clock_face_classic_create(lv_obj_t *screen)
     lv_obj_set_style_text_opa(clock_face_classic_date_label, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(clock_face_classic_date_label, &lv_font_montserrat_18, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_add_flag(clock_face_classic_date_label, LV_OBJ_FLAG_HIDDEN);
-
-    dot_bar = lv_obj_create(screen);
-    lv_obj_set_size(dot_bar, 65, 12);
-    lv_obj_set_align(dot_bar, LV_ALIGN_BOTTOM_MID);
-    lv_obj_set_y(dot_bar, -8);
-    lv_obj_remove_flag(dot_bar, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_opa(dot_bar, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(dot_bar, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    index = 0;
-    while (index < 6) {
-        lv_obj_t *dot = lv_obj_create(dot_bar);
-
-        lv_obj_set_size(dot, (index == 0) ? 8 : 4, (index == 0) ? 8 : 4);
-        lv_obj_set_align(dot, LV_ALIGN_LEFT_MID);
-        lv_obj_set_x(dot, (int32_t)(index * 10));
-        lv_obj_remove_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_bg_color(dot, (index == 0) ? lv_color_hex(0x101C52) : lv_color_hex(0xB4B6E6),
-                                  LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_border_width(dot, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-        index++;
-    }
 }
 
 static void clock_face_classic_update(const clock_view_data_t *view_data)
