@@ -3,6 +3,7 @@ idf_component_register(
     SRCS
         main.c
         apps/01_WIFI_Connect/WiFi_Connect.c
+        apps/01_WIFI_Connect/dns_server/dns_server.c
         apps/02_Clock_Display/Clock_App.c
         apps/02_Clock_Display/Clock_Controller.c
         apps/02_Clock_Display/assets/Fonts/SC_Font_1.c
@@ -25,6 +26,7 @@ idf_component_register(
         examples/07_Brookesia_Test/apps/brookesia_app_squareline_demo/ui/images/ui_img_clock_sec_png.c
     INCLUDE_DIRS
         .
+        apps/01_WIFI_Connect/dns_server/include
         apps/02_Clock_Display
         apps/02_Clock_Display/assets/UI
     WHOLE_ARCHIVE
@@ -35,5 +37,6 @@ idf_component_register(
         esp_event
         nvs_flash
         esp_lvgl_adapter
+        lwip
     )
     

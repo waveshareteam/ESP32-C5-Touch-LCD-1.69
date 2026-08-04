@@ -10,9 +10,11 @@
 #include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
+#include "lwip/inet.h"
 #include "nvs_flash.h"
 #include "bsp/esp-bsp.h"
 #include "lvgl.h"
+#include "dns_server.h"
 #include "src/libs/qrcode/lv_qrcode.h"
 
 #define WIFI_CONNECT_IDLE_MS          (1000)
@@ -21,14 +23,17 @@
 #define WIFI_CONNECT_AP_MAX_CONN      (4)
 #define WIFI_CONNECT_AP_PASSWORD      "12345678"
 #define WIFI_CONNECT_AP_URL           "http://192.168.4.1"
+#define WIFI_CONNECT_CAPTIVE_URI_MAX  (32)
+#define WIFI_CONNECT_HTTP_MAX_SOCKETS (4)
+#define WIFI_CONNECT_HTTP_BACKLOG     (2)
+#define WIFI_CONNECT_HTTP_RECV_TIMEOUT_SEC (2)
+#define WIFI_CONNECT_HTTP_SEND_TIMEOUT_SEC (2)
 #define WIFI_CONNECT_STATUS_BAR_WIDTH (220)
 #define WIFI_CONNECT_STATUS_BAR_HEIGHT_MARQUEE (40)
 #define WIFI_CONNECT_STATUS_BAR_HEIGHT_DETAIL  (72)
 #define WIFI_CONNECT_STATUS_BAR_BOTTOM_PERCENT (8)
 #define WIFI_CONNECT_QR_PAYLOAD_FORMAT \
-    "SSID:%s\r\n" \
-    "PASSWORD:%s\r\n" \
-    "URL:%s\r\n"
+    "WIFI:T:WPA;S:%s;P:%s;;"
 
 #define BSP_DISPLAY_PARTIAL_MODE_HEIGHT 10
 
@@ -45,12 +50,14 @@ typedef enum {
 static const char *TAG = "wifi_connect";
 
 static httpd_handle_t wifi_connect_httpd;
+static dns_server_handle_t wifi_connect_dns_server;
 static wifi_connect_state_t wifi_connect_state;
 static lv_obj_t *wifi_connect_status_bar;
 static lv_obj_t *wifi_connect_status_label;
 static char wifi_connect_ap_ssid[32];
 static char wifi_connect_sta_ssid[33];
 static char wifi_connect_sta_ip[16];
+static char wifi_connect_captive_uri[WIFI_CONNECT_CAPTIVE_URI_MAX];
 static char wifi_connect_last_status_text[192];
 static bool wifi_connect_last_use_marquee;
 
@@ -85,6 +92,11 @@ static void wifi_connect_url_decode(char *text)
 static void wifi_connect_set_state(wifi_connect_state_t new_state)
 {
     wifi_connect_state = new_state;
+}
+
+static void wifi_connect_set_close_header(httpd_req_t *req)
+{
+    httpd_resp_set_hdr(req, "Connection", "close");
 }
 
 static void wifi_connect_status_label_x_cb(void *var, int32_t value)
@@ -185,8 +197,18 @@ static esp_err_t wifi_connect_index_get_handler(httpd_req_t *req)
         "<p>Submit home router credentials and wait for the watch screen status update.</p>"
         "</body></html>";
 
+    wifi_connect_set_close_header(req);
     httpd_resp_set_type(req, "text/html");
     return httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
+}
+
+static esp_err_t wifi_connect_redirect_to_root(httpd_req_t *req, const char *body)
+{
+    httpd_resp_set_status(req, "303 See Other");
+    httpd_resp_set_hdr(req, "Location", "/");
+    wifi_connect_set_close_header(req);
+    httpd_resp_set_type(req, "text/plain");
+    return httpd_resp_send(req, body, HTTPD_RESP_USE_STRLEN);
 }
 
 static const char *wifi_connect_state_to_text(wifi_connect_state_t current_state)
@@ -210,6 +232,7 @@ static esp_err_t wifi_connect_status_get_handler(httpd_req_t *req)
 {
     char response[256];
 
+    wifi_connect_set_close_header(req);
     httpd_resp_set_type(req, "application/json");
     snprintf(response, sizeof(response),
              "{\"state\":\"%s\",\"ssid\":\"%s\",\"ip\":\"%s\"}",
@@ -253,8 +276,35 @@ static esp_err_t wifi_connect_result_get_handler(httpd_req_t *req)
         "</script>"
         "</body></html>";
 
+    wifi_connect_set_close_header(req);
     httpd_resp_set_type(req, "text/html");
     return httpd_resp_send(req, html, HTTPD_RESP_USE_STRLEN);
+}
+
+static esp_err_t wifi_connect_hotspot_detect_get_handler(httpd_req_t *req)
+{
+    return wifi_connect_redirect_to_root(req, "Redirect to captive portal");
+}
+
+static esp_err_t wifi_connect_generate_204_get_handler(httpd_req_t *req)
+{
+    return wifi_connect_redirect_to_root(req, "Redirect to captive portal");
+}
+
+static esp_err_t wifi_connect_connecttest_get_handler(httpd_req_t *req)
+{
+    return wifi_connect_redirect_to_root(req, "Redirect to captive portal");
+}
+
+static esp_err_t wifi_connect_ncsi_get_handler(httpd_req_t *req)
+{
+    return wifi_connect_redirect_to_root(req, "Redirect to captive portal");
+}
+
+static esp_err_t wifi_connect_http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
+{
+    LV_UNUSED(err);
+    return wifi_connect_redirect_to_root(req, "Redirect to captive portal");
 }
 
 static esp_err_t wifi_connect_configure_post_handler(httpd_req_t *req)
@@ -292,6 +342,7 @@ static esp_err_t wifi_connect_configure_post_handler(httpd_req_t *req)
     ESP_ERROR_CHECK(wifi_connect_apply_sta_config(ssid, password));
     httpd_resp_set_status(req, "303 See Other");
     httpd_resp_set_hdr(req, "Location", "/result");
+    wifi_connect_set_close_header(req);
     return httpd_resp_send(req, NULL, 0);
 }
 
@@ -322,15 +373,49 @@ static httpd_handle_t wifi_connect_start_http_server(void)
         .handler = wifi_connect_result_get_handler,
         .user_ctx = NULL,
     };
+    httpd_uri_t hotspot_detect_uri = {
+        .uri = "/hotspot-detect.html",
+        .method = HTTP_GET,
+        .handler = wifi_connect_hotspot_detect_get_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t generate_204_uri = {
+        .uri = "/generate_204",
+        .method = HTTP_GET,
+        .handler = wifi_connect_generate_204_get_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t connecttest_uri = {
+        .uri = "/connecttest.txt",
+        .method = HTTP_GET,
+        .handler = wifi_connect_connecttest_get_handler,
+        .user_ctx = NULL,
+    };
+    httpd_uri_t ncsi_uri = {
+        .uri = "/ncsi.txt",
+        .method = HTTP_GET,
+        .handler = wifi_connect_ncsi_get_handler,
+        .user_ctx = NULL,
+    };
     httpd_handle_t server = NULL;
 
+    config.max_open_sockets = WIFI_CONNECT_HTTP_MAX_SOCKETS;
     config.max_uri_handlers = 8;
+    config.backlog_conn = WIFI_CONNECT_HTTP_BACKLOG;
+    config.lru_purge_enable = true;
+    config.recv_wait_timeout = WIFI_CONNECT_HTTP_RECV_TIMEOUT_SEC;
+    config.send_wait_timeout = WIFI_CONNECT_HTTP_SEND_TIMEOUT_SEC;
 
     ESP_ERROR_CHECK(httpd_start(&server, &config));
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &index_uri));
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &configure_uri));
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &status_uri));
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &result_uri));
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &hotspot_detect_uri));
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &generate_204_uri));
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &connecttest_uri));
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &ncsi_uri));
+    ESP_ERROR_CHECK(httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, wifi_connect_http_404_error_handler));
 
     return server;
 }
@@ -388,8 +473,25 @@ static void wifi_connect_make_ap_ssid(char *ssid, size_t size)
     snprintf(ssid, size, "ESP32C5_%02X%02X%02X", mac[3], mac[4], mac[5]);
 }
 
+static void wifi_connect_set_captive_portal_uri(void)
+{
+    esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    esp_netif_ip_info_t ip_info;
+
+    ESP_ERROR_CHECK(ap_netif ? ESP_OK : ESP_FAIL);
+    ESP_ERROR_CHECK(esp_netif_get_ip_info(ap_netif, &ip_info));
+    snprintf(wifi_connect_captive_uri, sizeof(wifi_connect_captive_uri),
+             "http://" IPSTR, IP2STR(&ip_info.ip));
+
+    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_dhcps_stop(ap_netif));
+    ESP_ERROR_CHECK(esp_netif_dhcps_option(ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_CAPTIVEPORTAL_URI,
+                                           wifi_connect_captive_uri, strlen(wifi_connect_captive_uri)));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_dhcps_start(ap_netif));
+}
+
 static void wifi_connect_start_network(void)
 {
+    dns_server_config_t dns_config = DNS_SERVER_CONFIG_SINGLE("*", "WIFI_AP_DEF");
     wifi_init_config_t init_config = WIFI_INIT_CONFIG_DEFAULT();
     wifi_config_t ap_config = {0};
 
@@ -416,7 +518,10 @@ static void wifi_connect_start_network(void)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
+    wifi_connect_set_captive_portal_uri();
     wifi_connect_httpd = wifi_connect_start_http_server();
+    wifi_connect_dns_server = start_dns_server(&dns_config);
+    ESP_ERROR_CHECK(wifi_connect_dns_server ? ESP_OK : ESP_FAIL);
     wifi_connect_set_state(WIFI_CONNECT_STATE_WAIT_CONFIG);
 }
 
@@ -435,7 +540,7 @@ static void wifi_connect_refresh_status(lv_timer_t *timer)
     case WIFI_CONNECT_STATE_AP_READY:
     case WIFI_CONNECT_STATE_WAIT_CONFIG:
         snprintf(text, sizeof(text),
-                 "1.Scan QR to join AP   2.Open %s   3.Set home WiFi   AP:%s   PWD:%s",
+                 "1.Scan QR to join AP   2.Portal opens automatically   3.If needed open %s   AP:%s   PWD:%s",
                  WIFI_CONNECT_AP_URL, wifi_connect_ap_ssid, WIFI_CONNECT_AP_PASSWORD);
         use_marquee = true;
         break;
@@ -500,7 +605,7 @@ static void wifi_connect_create_screen(void)
     lv_obj_set_y(qr, 52);
 
     snprintf(qr_payload, sizeof(qr_payload), WIFI_CONNECT_QR_PAYLOAD_FORMAT,
-             wifi_connect_ap_ssid, WIFI_CONNECT_AP_PASSWORD, WIFI_CONNECT_AP_URL);
+             wifi_connect_ap_ssid, WIFI_CONNECT_AP_PASSWORD);
     lv_qrcode_update(qr, qr_payload, strlen(qr_payload));
 
     screen_height = lv_obj_get_height(screen);
@@ -537,6 +642,9 @@ void wifi_connect_test_run(void)
 {
     lv_display_t *display = NULL;
 
+    esp_log_level_set("httpd_uri", ESP_LOG_ERROR);
+    esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
+    esp_log_level_set("httpd_parse", ESP_LOG_ERROR);
     wifi_connect_set_state(WIFI_CONNECT_STATE_INIT);
     wifi_connect_init_stack();
     wifi_connect_start_network();
