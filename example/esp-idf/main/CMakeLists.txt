@@ -6,6 +6,7 @@ idf_component_register(
         apps/01_WIFI_Connect/dns_server/dns_server.c
         apps/02_Clock_Display/Clock_App.c
         apps/02_Clock_Display/Clock_Controller.c
+        apps/03_Honeycomb_Demo/Honeycomb_Demo.c
         apps/02_Clock_Display/assets/Fonts/SC_Font_1.c
         apps/02_Clock_Display/assets/UI/image/Clock_Hand_Hour.c
         apps/02_Clock_Display/assets/UI/image/Clock_Hand_Min.c

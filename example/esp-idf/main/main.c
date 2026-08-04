@@ -7,6 +7,7 @@
 #include "examples/07_Brookesia_Test/Brookesia_Test.h"
 #include "apps/01_WIFI_Connect/WiFi_Connect.h"
 #include "apps/02_Clock_Display/Clock_App.h"
+#include "apps/03_Honeycomb_Demo/Honeycomb_Demo.h"
 
 
 // Only one example code can be run at a time
@@ -18,8 +19,9 @@
 #define EXAMPLE_LVGL_DEMO_TEST      0
 #define EXAMPLE_Brookesia_TEST      0
 
-#define APPS_WIFI_Connect           1
+#define APPS_WIFI_Connect           0
 #define APPS_Clock                  0
+#define APPS_Honeycomb_Demo         1
 
 void app_main(void)
 {
@@ -41,5 +43,7 @@ void app_main(void)
     wifi_connect_test_run();
 #elif APPS_Clock
     clock_test_run();
+#elif APPS_Honeycomb_Demo
+    honeycomb_demo_run();
 #endif
 }
