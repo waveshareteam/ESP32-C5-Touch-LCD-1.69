@@ -10,3 +10,12 @@ sdkconfig
 sdkconfig.old
 managed_components/
 dependencies.lock
+
+# Archives
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.bz2
